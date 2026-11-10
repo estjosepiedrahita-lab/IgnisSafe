@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IGNIS SAFE · Asistente de Prevención de Incendios</title>
+  <meta name="description" content="Guía interactiva de prevención de incendios: tipos de fuego, extintores, método PASS y práctica guiada.">
+  <meta name="theme-color" content="#0b132b">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a9bed6' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3 5 6v5c0 4.7 2.9 8.5 7 10 4.1-1.5 7-5.3 7-10V6l-7-3Z'/%3E%3Cpath d='m9.5 12 1.7 1.7 3.6-4'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#app">Saltar al contenido</a>
+
+  <header class="site-header" id="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#/" aria-label="IGNIS SAFE, ir al inicio">
+        <span class="brand-mark" data-icon="shield" data-size="22"></span>
+        <span class="brand-name">IGNIS<span class="brand-light">SAFE</span></span>
+      </a>
+
+      <nav class="main-nav" id="main-nav" aria-label="Principal">
+        <a href="#/" data-nav="">Inicio</a>
+        <a href="#/guia" data-nav="guia">Guía de seguridad</a>
+        <a href="#/como-usar" data-nav="como-usar">Cómo usar</a>
+        <a href="#/analisis" class="nav-cta" data-nav="analisis">Analizar imagen <span data-icon="arrow" data-size="16"></span></a>
+      </nav>
+
+      <div class="header-status"><span class="dot"></span><span>Entorno de práctica segura</span></div>
+
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="Abrir menú">
+        <span data-icon="menu" data-size="22"></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="app" tabindex="-1" aria-live="polite"></main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p class="emergency-note">
+        <span data-icon="alert" data-size="18"></span>
+        <span><strong>Ante un incendio real:</strong> evacúa, da la alarma y llama a emergencias. Esta página es solo educativa.</span>
+      </p>
+      <p class="footer-meta">
+        <span>Proyecto universitario</span><span>•</span><span>Educación para la prevención</span>
+      </p>
+    </div>
+  </footer>
+
+  <!-- Ayuda flotante -->
+  <div class="help" id="help">
+    <div class="help-menu" id="help-menu" hidden role="menu" aria-label="Ayuda">
+      <button type="button" role="menuitem" data-action="start-tour"><span data-icon="compass" data-size="18"></span> Recorrido guiado</button>
+      <a role="menuitem" href="#/como-usar"><span data-icon="list" data-size="18"></span> Cómo usar la página</a>
+      <a role="menuitem" href="#/guia"><span data-icon="book" data-size="18"></span> Guía de seguridad</a>
+      <a role="menuitem" href="#/analisis"><span data-icon="image" data-size="18"></span> Analizar una imagen</a>
+    </div>
+    <button class="help-fab" id="help-fab" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Ayuda y tutorial">
+      <span data-icon="help" data-size="24"></span>
+    </button>
+  </div>
+
+  <div id="overlay-root"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/analyzer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

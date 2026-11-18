@@ -78,15 +78,18 @@
 
   /* ---------- banco de imágenes de la práctica ---------- */
   const CLASS_KEYS = ['A', 'B', 'C', 'D', 'F'];
+  const NONE = 'none';   // respuesta «Sin fuego»
 
   function getScenarios() {
-    const custom = (window.IGNIS_SCENARIOS || []).filter((s) => s && s.src && D.FIRE_CLASSES[s.fireClass]);
+    const custom = (window.IGNIS_SCENARIOS || []).filter((s) => s && s.src && (D.FIRE_CLASSES[s.fireClass] || s.fireClass === NONE));
     if (custom.length) {
       return custom.map((s, i) => ({
-        id: s.id || ('img-' + i),
+        id: s.id || String(s.src).split('/').pop() || ('img-' + i),
         src: s.src,
         fireClass: s.fireClass,
-        alt: s.alt || 'Imagen de un incendio',
+        best: s.best && byId(D.EXTINGUISHERS, s.best) ? s.best : '',
+        nota: s.nota || '',
+        alt: s.alt || 'Imagen del caso de práctica',
         placeholder: false
       }));
     }
@@ -97,6 +100,18 @@
       alt: 'Ilustración de ejemplo de un fuego de Clase ' + k,
       placeholder: true
     }));
+  }
+
+  /* Respuestas correctas del caso (guardadas desde que se elige la imagen; se
+     muestran solo al confirmar). En un caso «sin fuego» no hay extintor ni PASS. */
+  function caseKey(sc) {
+    if (sc.fireClass === NONE) return { none: true, fc: null, best: '', ok: [] };
+    const fc = D.FIRE_CLASSES[sc.fireClass];
+    const best = sc.best || fc.best;
+    const ok = D.EXTINGUISHERS
+      .filter((e) => e.classes.indexOf(fc.key) !== -1 && e.id !== best)
+      .map((e) => e.id);
+    return { none: false, fc: fc, best: best, ok: ok };
   }
 
   /* Selección aleatoria SIN repetir: se recorren todas las imágenes del banco antes de
@@ -450,7 +465,9 @@
     updateProgress();
   }
 
+  function saidNone() { return state.answerClass === NONE; }
   function answersComplete() {
+    if (saidNone()) return true;
     return Boolean(state.answerClass && state.extinguisher && state.pass.length === 4);
   }
 
@@ -458,6 +475,23 @@
     const box = $('#class-options');
     if (!box) return;
     const cf = state.confirmed;
+    const noneOpt = (() => {
+      const sel = saidNone();
+      const real = state.scenario.fireClass === NONE;
+      let cls = 'class-opt class-none' + (sel ? ' selected' : '');
+      let mark = sel ? ic('check', 14) : '';
+      if (cf) {
+        if (sel && real) cls += ' correct';
+        else if (sel) { cls += ' incorrect'; mark = ic('alert', 14); }
+        else if (real) cls += ' answer';
+      }
+      return `<button type="button" class="${cls}" data-action="answer-class" data-id="${NONE}" aria-pressed="${sel}" ${cf ? 'disabled' : ''}>
+        <span class="opt-mark">${mark}</span>
+        <span class="class-letter">${ic('shield', 18)}</span>
+        <span class="none-txt"><strong>Sin fuego</strong><small>En la imagen no hay llamas (por ejemplo, solo humo o un fuego ya apagado).</small></span>
+        ${cf && real ? '<span class="opt-flag">Correcta</span>' : ''}
+      </button>`;
+    })();
     box.innerHTML = CLASS_KEYS.map((k) => {
       const c = D.FIRE_CLASSES[k];
       const sel = state.answerClass === k;
@@ -476,19 +510,30 @@
         <small>${esc(c.examples)}</small>
         ${cf && real ? '<span class="opt-flag">Correcta</span>' : ''}
       </button>`;
-    }).join('');
+    }).join('') + noneOpt;
     if (focusId) { const b = $('[data-id="' + focusId + '"]', box); if (b) b.focus(); }
+  }
+
+  /* Si el usuario respondió «Sin fuego», las preguntas 2 y 3 no aplican */
+  function naNote(card) {
+    if (!card) return;
+    card.classList.toggle('not-applicable', saidNone() && !state.confirmed);
+    let n = $('.na-note', card);
+    if (saidNone() && !state.confirmed) {
+      if (!n) { card.insertAdjacentHTML('afterbegin', '<p class="na-note">' + ic('alert', 15) + ' No aplica: respondiste que en la imagen no hay fuego.</p>'); }
+    } else if (n) n.remove();
   }
 
   function renderExt(focusId) {
     const box = $('#ext-options');
     if (!box) return;
     const cf = state.confirmed;
-    const fc = D.FIRE_CLASSES[state.scenario.fireClass];
+    const key = caseKey(state.scenario);
+    const lock = cf || saidNone();
     box.innerHTML = D.EXTINGUISHERS.map((e) => {
       const sel = state.extinguisher === e.id;
-      const isBest = e.id === fc.best;
-      const isOk = fc.ok.indexOf(e.id) !== -1;
+      const isBest = e.id === key.best;
+      const isOk = key.ok.indexOf(e.id) !== -1;
       let cls = 'ext-opt' + (sel ? ' selected' : '');
       let mark = sel ? ic('check', 14) : '';
       let flag = '';
@@ -497,15 +542,16 @@
           if (isBest || isOk) cls += ' correct';
           else { cls += ' incorrect'; mark = ic('alert', 14); }
         } else if (isBest) cls += ' answer';
-        flag = isBest ? 'Recomendado' : (isOk ? 'También válido' : '');
+        flag = key.none ? (sel ? 'No hacía falta' : '') : (isBest ? 'Recomendado' : (isOk ? 'También válido' : ''));
       }
-      return `<button type="button" class="${cls}" data-action="pick-ext" data-id="${e.id}" aria-pressed="${sel}" ${cf ? 'disabled' : ''}>
+      return `<button type="button" class="${cls}" data-action="pick-ext" data-id="${e.id}" aria-pressed="${sel}" ${lock ? 'disabled' : ''}>
         <span class="opt-mark">${mark}</span>
         <span class="ext-icon">${ic(e.icon, 20)}</span>
         <span class="ext-name">${esc(e.short)}</span>
         ${flag ? '<span class="opt-flag">' + flag + '</span>' : ''}
       </button>`;
     }).join('');
+    naNote(box.closest('.question-card'));
     if (focusId) { const b = $('[data-id="' + focusId + '"]', box); if (b) b.focus(); }
   }
 
@@ -513,14 +559,16 @@
     const card = $('#pass-card');
     if (!card) return;
     const cf = state.confirmed;
+    const lock = cf || saidNone();
+    const judge = cf && state.scenario.fireClass !== NONE;   // en un caso sin fuego el PASS no se califica
     const items = state.passOrder.map((id) => {
       const step = byId(D.PASS_STEPS, id);
       const pos = state.pass.indexOf(id);
       const selected = pos >= 0;
-      const right = cf && selected && D.CORRECT_PASS[pos] === id;
-      const wrong = cf && selected && !right;
+      const right = judge && selected && D.CORRECT_PASS[pos] === id;
+      const wrong = judge && selected && !right;
       const badge = right ? ic('check', 16) : wrong ? ic('alert', 16) : selected ? String(pos + 1) : '—';
-      return `<button type="button" class="pass-opt${selected ? ' selected' : ''}${right ? ' correct' : ''}${wrong ? ' incorrect' : ''}" data-action="pass-pick" data-id="${id}" aria-pressed="${selected}" ${cf ? 'disabled' : ''}>
+      return `<button type="button" class="pass-opt${selected ? ' selected' : ''}${right ? ' correct' : ''}${wrong ? ' incorrect' : ''}" data-action="pass-pick" data-id="${id}" aria-pressed="${selected}" ${lock ? 'disabled' : ''}>
         <span class="pass-ico">${ic(step.icon, 24)}</span>
         <span class="pass-txt"><strong>${esc(step.label)}</strong><small>${selected ? 'Seleccionado en posición ' + (pos + 1) : 'Seleccionar'}</small></span>
         <span class="pass-badge">${badge}</span>
@@ -537,7 +585,8 @@
       </div>
       <p class="pass-instruction">Selecciona las acciones una a una en el orden en que las realizarías. Pulsa una acción seleccionada para quitarla.</p>
       <div class="pass-grid">${items}</div>
-      ${cf ? '' : `<div class="pass-actions"><button type="button" class="btn btn-ghost" data-action="pass-reset" ${state.pass.length ? '' : 'disabled'}>Reiniciar</button></div>`}`;
+      ${lock ? '' : `<div class="pass-actions"><button type="button" class="btn btn-ghost" data-action="pass-reset" ${state.pass.length ? '' : 'disabled'}>Reiniciar</button></div>`}`;
+    naNote(card);
     if (focusId) { const b = $('[data-id="' + focusId + '"]', card); if (b && !b.disabled) b.focus(); }
   }
 
@@ -561,14 +610,15 @@
   }
 
   function updateProgress() {
-    const done = (state.answerClass ? 1 : 0) + (state.extinguisher ? 1 : 0) + (state.pass.length === 4 ? 1 : 0);
+    const total = saidNone() ? 1 : 3;
+    const done = saidNone() ? 1 : (state.answerClass ? 1 : 0) + (state.extinguisher ? 1 : 0) + (state.pass.length === 4 ? 1 : 0);
     const t = $('#completion-text'), b = $('#completion-bar');
-    if (t) t.textContent = done + ' de 3';
-    if (b) b.style.width = (done / 3 * 100) + '%';
+    if (t) t.textContent = done + ' de ' + total;
+    if (b) b.style.width = (done / total * 100) + '%';
     const btn = $('#confirm-btn'), hint = $('#confirm-hint');
-    if (btn) btn.disabled = done < 3;
+    if (btn) btn.disabled = done < total;
     if (hint) {
-      if (done === 3) hint.textContent = 'Todo listo. Confirma para ver las respuestas correctas.';
+      if (done === total) hint.textContent = 'Todo listo. Confirma para ver las respuestas correctas.';
       else {
         const missing = [];
         if (!state.answerClass) missing.push('el tipo de fuego');
@@ -586,31 +636,72 @@
     side.classList.add('revealed');
 
     const sc = state.scenario;
-    const fc = D.FIRE_CLASSES[sc.fireClass];
-    const chosen = byId(D.EXTINGUISHERS, state.extinguisher);
-    const best = byId(D.EXTINGUISHERS, fc.best);
-    const mine = D.FIRE_CLASSES[state.answerClass];
-    const isBest = chosen.id === fc.best;
-    const isOk = fc.ok.indexOf(chosen.id) !== -1;
+    const key = caseKey(sc);
+    const fc = key.fc;
+    const none = key.none;
+    const userNone = saidNone();
+    const chosen = userNone ? null : byId(D.EXTINGUISHERS, state.extinguisher);
+    const best = none ? null : byId(D.EXTINGUISHERS, key.best);
+    const mine = userNone ? null : D.FIRE_CLASSES[state.answerClass];
     const classOk = state.answerClass === sc.fireClass;
+    const isBest = !none && chosen && chosen.id === key.best;
+    const isOk = !none && chosen && key.ok.indexOf(chosen.id) !== -1;
     const extOk = isBest || isOk;
-    const passOk = D.CORRECT_PASS.every((id, i) => state.pass[i] === id);
-    const score = (classOk ? 1 : 0) + (extOk ? 1 : 0) + (passOk ? 1 : 0);
-    const alsoValid = fc.ok.map((id) => byId(D.EXTINGUISHERS, id).short);
+    const passOk = !userNone && D.CORRECT_PASS.every((id, i) => state.pass[i] === id);
+    const total = none ? 1 : 3;
+    const score = none ? (classOk ? 1 : 0) : (classOk ? 1 : 0) + (extOk ? 1 : 0) + (passOk ? 1 : 0);
+    const alsoValid = key.ok.map((id) => byId(D.EXTINGUISHERS, id).short);
+    const label = (c) => c ? 'Clase ' + esc(c.key) + ' · ' + esc(c.title) : 'Sin fuego';
 
-    const classText = classOk
-      ? 'Es un fuego de Clase ' + fc.key + ' (' + fc.detected.toLowerCase() + '). ' + fc.examples
-      : 'Era un fuego de Clase ' + fc.key + ' (' + fc.detected.toLowerCase() + '), no de Clase ' + mine.key + '. ' + fc.examples;
-    let extText;
-    if (isBest) extText = fc.why;
-    else if (isOk) extText = chosen.name + ' también es válido para la Clase ' + fc.key + ', aunque lo más adecuado es ' + best.name + '. ' + fc.why;
-    else extText = chosen.name + ' no es la opción más segura aquí. ' + (chosen.id === 'agua' && fc.warning ? fc.warning + ' ' : '') + 'Lo recomendado es ' + best.name + '. ' + fc.why;
+    let classText;
+    if (none) classText = classOk ? 'Correcto: en esta imagen no hay llamas.' : 'En esta imagen no hay llamas, así que no hacía falta clasificar el fuego ni usar un extintor.';
+    else if (classOk) classText = 'Es un fuego de Clase ' + fc.key + ' (' + fc.detected.toLowerCase() + '). ' + fc.examples;
+    else if (userNone) classText = 'Sí había fuego: era de Clase ' + fc.key + ' (' + fc.detected.toLowerCase() + '). ' + fc.examples;
+    else classText = 'Era un fuego de Clase ' + fc.key + ' (' + fc.detected.toLowerCase() + '), no de Clase ' + mine.key + '. ' + fc.examples;
+
+    const whyBest = key.best === fc?.best ? fc.why : '';
+    let extText = '';
+    if (!none) {
+      if (userNone) extText = 'Lo recomendado era ' + best.name + '. ' + whyBest;
+      else if (isBest) extText = whyBest;
+      else if (isOk) extText = chosen.name + ' también es válido para la Clase ' + fc.key + ', aunque lo más adecuado es ' + best.name + '. ' + whyBest;
+      else extText = chosen.name + ' no es la opción más segura aquí. ' + (chosen.id === 'agua' && fc.warning ? fc.warning + ' ' : '') + 'Lo recomendado es ' + best.name + '. ' + whyBest;
+    }
 
     const passList = D.CORRECT_PASS.map((id, i) => {
-      const s = byId(D.PASS_STEPS, id);
-      return '<li><span class="n">' + (i + 1) + '</span>' + esc(s.label) + '</li>';
+      const st = byId(D.PASS_STEPS, id);
+      return '<li><span class="n">' + (i + 1) + '</span>' + esc(st.label) + '</li>';
     }).join('');
     const myPass = state.pass.map((id, i) => (i + 1) + '. ' + esc(byId(D.PASS_STEPS, id).short)).join(' · ');
+
+    let extRow, passRow;
+    if (none) {
+      extRow = `
+        <div class="reveal-row ${userNone ? 'ok' : 'bad'}">
+          <p class="reveal-title">${userNone ? ic('check', 15) : ic('alert', 15)} Extintor y método PASS</p>
+          <div class="pair">
+            <div><small>Tu respuesta</small><strong>${userNone ? 'No aplica' : esc(chosen.name)}</strong></div>
+            <div class="right"><small>Respuesta correcta</small><strong>No hace falta usar extintor</strong></div>
+          </div>
+        </div>`;
+      passRow = '';
+    } else {
+      extRow = `
+        <div class="reveal-row ${extOk ? 'ok' : 'bad'}">
+          <p class="reveal-title">${extOk ? ic('check', 15) : ic('alert', 15)} Extintor</p>
+          <div class="pair">
+            <div><small>Tu respuesta</small><strong>${chosen ? esc(chosen.name) : 'Ninguno (respondiste «Sin fuego»)'}</strong></div>
+            <div class="right"><small>Extintor recomendado</small><strong>${esc(best.name)}</strong>${alsoValid.length ? '<small class="also">También válidos: ' + esc(alsoValid.join(', ')) + '</small>' : ''}</div>
+          </div>
+        </div>`;
+      passRow = `
+        <div class="reveal-row ${passOk ? 'ok' : 'bad'}">
+          <p class="reveal-title">${passOk ? ic('check', 15) : ic('alert', 15)} Método PASS</p>
+          ${passOk ? '<p class="reveal-note">Tu orden fue correcto.</p>' : '<p class="reveal-note"><small>Tu orden</small>' + (userNone ? 'No respondido' : myPass) + '</p>'}
+          <small class="list-label">Orden correcto</small>
+          <ol class="seq">${passList}</ol>
+        </div>`;
+    }
 
     box.innerHTML = `
       <section class="reveal card" id="reveal-card" tabindex="-1" aria-live="polite" aria-label="Respuestas correctas">
@@ -619,37 +710,23 @@
             <p class="kicker">Respuestas correctas</p>
             <h2>Revisemos tus decisiones</h2>
           </div>
-          <div class="score-badge${score === 3 ? ' good' : ''}"><strong>${score}/3</strong><span>correctas</span></div>
+          <div class="score-badge${score === total ? ' good' : ''}"><strong>${score}/${total}</strong><span>correctas</span></div>
         </div>
 
         <div class="reveal-row ${classOk ? 'ok' : 'bad'}">
           <p class="reveal-title">${classOk ? ic('check', 15) : ic('alert', 15)} Tipo de fuego</p>
           <div class="pair">
-            <div><small>Tu respuesta</small><strong>Clase ${esc(mine.key)} · ${esc(mine.title)}</strong></div>
-            <div class="right"><small>Respuesta correcta</small><strong>Clase ${esc(fc.key)} · ${esc(fc.title)}</strong></div>
+            <div><small>Tu respuesta</small><strong>${label(mine)}</strong></div>
+            <div class="right"><small>Respuesta correcta</small><strong>${label(fc)}</strong></div>
           </div>
         </div>
-
-        <div class="reveal-row ${extOk ? 'ok' : 'bad'}">
-          <p class="reveal-title">${extOk ? ic('check', 15) : ic('alert', 15)} Extintor</p>
-          <div class="pair">
-            <div><small>Tu respuesta</small><strong>${esc(chosen.name)}</strong></div>
-            <div class="right"><small>Extintor recomendado</small><strong>${esc(best.name)}</strong>${alsoValid.length ? '<small class="also">También válidos: ' + esc(alsoValid.join(', ')) + '</small>' : ''}</div>
-          </div>
-        </div>
-
-        <div class="reveal-row ${passOk ? 'ok' : 'bad'}">
-          <p class="reveal-title">${passOk ? ic('check', 15) : ic('alert', 15)} Método PASS</p>
-          ${passOk ? '<p class="reveal-note">Tu orden fue correcto.</p>' : '<p class="reveal-note"><small>Tu orden</small>' + myPass + '</p>'}
-          <small class="list-label">Orden correcto</small>
-          <ol class="seq">${passList}</ol>
-        </div>
-
+${extRow}
+${passRow}
         <div id="model-box"></div>
 
-        <div class="notice ${score === 3 ? 'success' : 'warn'} explain">
-          <span class="notice-icon">${ic(score === 3 ? 'check' : 'alert', 20)}</span>
-          <div><h3>¿Por qué?</h3><p>${esc(classText)}</p><p>${esc(extText)}</p></div>
+        <div class="notice ${score === total ? 'success' : 'warn'} explain">
+          <span class="notice-icon">${ic(score === total ? 'check' : 'alert', 20)}</span>
+          <div><h3>¿Por qué?</h3><p>${esc(classText)}</p>${extText.trim() ? '<p>' + esc(extText.trim()) + '</p>' : ''}${sc.nota ? '<p>' + esc(sc.nota) + '</p>' : ''}</div>
         </div>
       </section>`;
     renderModelBox();
@@ -722,7 +799,7 @@
           </div>
           <div class="notice warn">
             <span class="notice-icon">${ic('alert', 20)}</span>
-            <p><strong>Equipos eléctricos energizados:</strong> no tienen clase propia en esta clasificación. Corta la energía si puedes hacerlo con seguridad y usa CO₂ o PQS; nunca agua ni espuma.</p>
+            <p><strong>Equipos eléctricos energizados (Clase C):</strong> corta la energía si puedes hacerlo con seguridad y usa CO₂ (no deja residuos) o PQS; nunca agua ni espuma, porque conducen la electricidad.</p>
           </div>
         </section>
 
@@ -929,10 +1006,13 @@
       inner = r.detected
         ? `<p class="reveal-note">El modelo detectó fuego en aproximadamente el <strong>${pctText}%</strong> de la imagen (zona naranja sobre la foto).</p>
            <label class="check-row"><input type="checkbox" id="model-toggle" ${m.showMask ? 'checked' : ''}> Mostrar la zona detectada sobre la imagen</label>`
-        : `<p class="reveal-note">El modelo no marcó ninguna zona de fuego en esta imagen, aunque el caso sí es de Clase ${esc(sc.fireClass)}. Los modelos pueden fallar: confía en lo que ves.</p>`;
+        : (sc.fireClass === NONE
+          ? `<p class="reveal-note">El modelo no marcó ninguna zona de fuego, y coincide con la respuesta correcta: en esta imagen no hay llamas.</p>`
+          : `<p class="reveal-note">El modelo no marcó ninguna zona de fuego en esta imagen, aunque el caso sí es de Clase ${esc(sc.fireClass)}. Los modelos pueden fallar: confía en lo que ves.</p>`);
+      if (r.detected && sc.fireClass === NONE) inner += `<p class="reveal-note">Ojo: en este caso no hay llamas. El humo, los reflejos o los colores cálidos pueden confundir al modelo.</p>`;
     }
     box.innerHTML = `
-      <div class="reveal-row ${m.status === 'done' && r.detected ? 'ok' : ''}">
+      <div class="reveal-row ${m.status === 'done' && (r.detected === (sc.fireClass !== NONE)) ? 'ok' : ''}">
         <p class="reveal-title">${ic('scan', 15)} Detección del modelo</p>
         ${inner}
       </div>`;
@@ -1161,7 +1241,10 @@
       case 'answer-class':
         if (state.confirmed) break;
         state.answerClass = id;
+        if (id === NONE) { state.extinguisher = ''; state.pass = []; }
         renderClassOptions(id);
+        renderExt();
+        renderPass();
         updateProgress();
         break;
       case 'pick-ext':

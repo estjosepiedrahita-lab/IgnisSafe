@@ -216,6 +216,12 @@ h3 { font-weight: 700; line-height: 1.25; }
 .class-letter { width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--radius-sm); background: #354c69; border: 1px solid #607a99; font-size: 19px; font-weight: 700; color: #e7edf4; }
 .class-opt strong { font-size: 16px; line-height: 1.2; color: var(--text-2); }
 .class-opt small { font-size: 13px; line-height: 1.35; color: var(--muted); }
+.class-opt.class-none { grid-column: 1 / -1; min-height: 0; flex-direction: row; align-items: center; gap: 14px; padding: 14px 44px 14px 14px; }
+.class-none .class-letter { flex: none; }
+.none-txt { display: flex; flex-direction: column; gap: 3px; }
+.class-none .opt-flag { margin-left: auto; }
+.not-applicable .ext-options, .not-applicable .pass-grid, .not-applicable .pass-instruction { opacity: .38; }
+.na-note { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 9px 12px; border-radius: var(--radius-sm); background: rgba(58, 80, 107, 0.35); border: 1px solid var(--line); font-size: 14px; color: var(--text-2); }
 
 .ext-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
 .ext-opt { position: relative; min-height: 104px; padding: 14px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; background: rgba(11, 19, 43, 0.25); border: 1px solid var(--line); border-radius: var(--radius-sm); color: #96a7bb; text-align: center; transition: border-color .15s, background .15s, color .15s; }

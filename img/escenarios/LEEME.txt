@@ -1,1 +1,1 @@
-Coloca aquí las imágenes de la práctica (JPG, PNG o WEBP) y regístralas en js/escenarios.js
+Imágenes de la práctica. Cada una debe estar registrada en js/escenarios.js con su respuesta correcta (fireClass).

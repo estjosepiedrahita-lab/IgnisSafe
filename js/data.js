@@ -33,11 +33,11 @@ window.IGNIS_DATA = (function () {
     },
     C: {
       key: 'C',
-      title: 'Gases',
-      examples: 'Propano, butano, acetileno, metano y gas natural.',
+      title: 'Gases y eléctricos',
+      examples: 'Gases inflamables (propano, butano, gas natural) y equipos eléctricos energizados.',
       noteLabel: 'Advertencia',
-      note: 'En un incendio de gas, lo prioritario suele ser cortar el suministro antes de intentar extinguir la llama, para evitar acumulaciones explosivas.',
-      detected: 'Gases inflamables',
+      note: 'Lo prioritario es cortar el suministro de gas o la energía eléctrica antes de intentar extinguir, para evitar acumulaciones explosivas o descargas.',
+      detected: 'Gases inflamables o equipos eléctricos',
       best: 'pqs',
       why: 'El polvo químico seco interrumpe la reacción en cadena de la llama. Aun así, lo primero es cortar el suministro de gas: apagar la llama sin cortar la fuga puede provocar una acumulación explosiva.',
       warning: 'Apagar la llama sin cortar la fuga puede crear una mezcla explosiva.'
@@ -169,13 +169,13 @@ window.IGNIS_DATA = (function () {
     {
       n: '04', title: 'Observa la imagen y responde', where: 'Práctica · imagen a la izquierda, preguntas a la derecha',
       what: 'Decides cómo enfrentarías ese incendio, antes de ver las respuestas correctas.',
-      how: 'Responde tres preguntas: qué tipo de fuego es, qué extintor elegirías y en qué orden aplicas el método PASS. Puedes cambiar cualquier respuesta cuantas veces quieras.',
+      how: 'Responde tres preguntas: qué tipo de fuego es, qué extintor elegirías y en qué orden aplicas el método PASS. Si crees que en la imagen no hay llamas, elige «Sin fuego» y solo tendrás que responder esa pregunta. Puedes cambiar cualquier respuesta cuantas veces quieras.',
       cta: null
     },
     {
       n: '05', title: 'Confirma tus respuestas', where: 'Práctica · parte final',
       what: 'Te muestra las respuestas correctas para que las compares con las tuyas.',
-      how: 'Cuando hayas respondido las tres preguntas, pulsa «Confirmar respuestas». Debajo de la imagen aparecen el tipo de fuego, el extintor recomendado, el orden correcto del método PASS, una explicación y la zona de fuego que detectó el modelo de inteligencia artificial.',
+      how: 'Cuando hayas respondido, pulsa «Confirmar respuestas». Debajo de la imagen aparecen el tipo de fuego, el extintor recomendado, el orden correcto del método PASS, una explicación y la zona de fuego que detectó el modelo de inteligencia artificial.',
       cta: null
     },
     {
@@ -188,6 +188,7 @@ window.IGNIS_DATA = (function () {
 
   const FAQ = [
     { q: '¿De dónde salen las imágenes?', a: 'El sistema elige al azar una imagen de su banco de casos y no repite ninguna hasta que hayas visto todas.' },
+    { q: '¿Y si en la imagen no hay fuego?', a: 'Algunos casos muestran solo humo o un fuego ya apagado. Si crees que no hay llamas, elige «Sin fuego» en la primera pregunta: las preguntas del extintor y del método PASS dejan de ser necesarias.' },
     { q: '¿Qué hace el modelo de inteligencia artificial?', a: 'Es una red neuronal (U-Net) que corre en tu navegador y marca dónde ve llamas en la imagen. Solo muestra su resultado después de que confirmas tus respuestas, y no decide la clase de fuego: esa la responde el banco de casos.' },
     { q: '¿Se guardan mis respuestas?', a: 'No. Las respuestas solo se usan durante la práctica y no se almacenan ni se comparten.' },
     { q: '¿Puedo repetir la práctica?', a: 'Sí. Al terminar pulsa «Practicar con otra imagen» y te muestra un caso nuevo.' },

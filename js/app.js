@@ -1,6 +1,6 @@
 /* ==========================================================================
    IGNIS SAFE · Lógica de la página
-   Rutas (hash):  #/  #/cargando  #/practica  #/analizador  #/guia[/seccion]  #/como-usar
+   Rutas (hash):  #/  #/cargando  #/practica  #/guia[/seccion]  #/como-usar
    ========================================================================== */
 (function () {
   'use strict';
@@ -99,19 +99,32 @@
     }));
   }
 
-  /* Baraja: recorre todas las imágenes en orden aleatorio antes de repetir, y
-     nunca muestra la misma dos veces seguidas. */
-  let bag = [];
+  /* Selección aleatoria SIN repetir: se recorren todas las imágenes del banco antes de
+     volver a empezar, y la primera de una nueva ronda nunca es la última que se vio.
+     La lista de imágenes ya vistas se guarda en el navegador, así que tampoco se repiten
+     al recargar la página. */
   let lastId = '';
+  function readSeen() {
+    try { const v = JSON.parse(store('ignis_seen') || '[]'); return Array.isArray(v) ? v : []; }
+    catch (e) { return []; }
+  }
   function pickScenario() {
     const all = getScenarios();
-    bag = bag.filter((s) => all.some((a) => a.id === s.id));
-    if (!bag.length) {
-      bag = shuffle(all);
-      if (all.length > 1 && bag[bag.length - 1].id === lastId) bag.unshift(bag.pop());
+    let seen = readSeen().filter((id) => all.some((a) => a.id === id));
+    if (!lastId) lastId = store('ignis_last') || '';
+    let pool = all.filter((a) => seen.indexOf(a.id) === -1);
+    let restarted = false;
+    if (!pool.length) {
+      restarted = seen.length > 0;
+      seen = [];
+      pool = all.length > 1 ? all.filter((a) => a.id !== lastId) : all;
     }
-    const s = bag.pop();
+    const s = pool[Math.floor(Math.random() * pool.length)];
+    seen.push(s.id);
+    store('ignis_seen', JSON.stringify(seen));
+    store('ignis_last', s.id);
     lastId = s.id;
+    state.round = { shown: seen.length, total: all.length, restarted: restarted };
     return s;
   }
 
@@ -149,7 +162,9 @@
     extinguisher: '',
     pass: [],
     confirmed: false,
-    selectedClass: null   // clase abierta en la guía
+    selectedClass: null,  // clase abierta en la guía
+    round: { shown: 0, total: 0, restarted: false },
+    model: { token: 0, status: 'idle', progress: 0, result: null, showMask: true }
   };
 
   let cleanup = null;
@@ -160,6 +175,7 @@
     state.extinguisher = '';
     state.pass = [];
     state.confirmed = false;
+    state.model = { token: state.model.token + 1, status: 'idle', progress: 0, result: null, showMask: true };
   }
 
   function startPractice() {
@@ -192,7 +208,6 @@
     '': { view: viewHome, title: 'Inicio' },
     'cargando': { view: viewLoading, title: 'Preparando la práctica' },
     'practica': { view: viewPractice, title: 'Modo práctica' },
-    'analizador': { view: viewAnalyzer, title: 'Analizador de fuego' },
     'guia': { view: viewGuide, title: 'Guía de seguridad' },
     'como-usar': { view: viewTutorial, title: 'Cómo usar la página' }
   };
@@ -287,31 +302,17 @@
           </section>
         </div>
 
-        <div class="entries">
-          <article class="learning-entry card" id="learning-entry">
-            <div class="learning-copy">
-              <span class="learning-icon">${ic('book', 25)}</span>
-              <div>
-                <p class="eyebrow">Guía de seguridad</p>
-                <h2>Aprende antes de practicar</h2>
-                <p>Consulta las clases de fuego, los tipos de extintores y el método PASS.</p>
-              </div>
+        <article class="learning-entry card" id="learning-entry">
+          <div class="learning-copy">
+            <span class="learning-icon">${ic('book', 25)}</span>
+            <div>
+              <p class="eyebrow">Guía de seguridad</p>
+              <h2>Aprende antes de practicar</h2>
+              <p>Consulta las clases de fuego, los tipos de extintores y el método PASS.</p>
             </div>
-            <a class="btn btn-ghost" href="#/guia">Explorar guía ${ic('arrow', 17)}</a>
-          </article>
-
-          <article class="learning-entry card" id="analyzer-entry">
-            <div class="learning-copy">
-              <span class="learning-icon">${ic('scan', 25)}</span>
-              <div>
-                <p class="eyebrow">Analizador de fuego</p>
-                <h2>Analiza tu propia imagen</h2>
-                <p>Sube una foto y el modelo marca dónde detecta llamas.</p>
-              </div>
-            </div>
-            <a class="btn btn-ghost" href="#/analizador">Abrir analizador ${ic('arrow', 17)}</a>
-          </article>
-        </div>
+          </div>
+          <a class="btn btn-ghost" href="#/guia">Explorar guía ${ic('arrow', 17)}</a>
+        </article>
       </section>`;
   }
 
@@ -400,6 +401,7 @@
                 <span class="image-tag"><i></i> Caso de práctica${sc.placeholder ? ' · imagen de ejemplo' : ''}</span>
               </div>
               <p class="case-caption">Observa con calma: ¿qué está ardiendo y qué hay alrededor?</p>
+              <p class="round-note">Imagen ${state.round.shown} de ${state.round.total}${state.round.restarted ? ' · empezó una ronda nueva: ya viste todas las imágenes' : ' · no se repiten hasta ver todas'}</p>
             </div>
             <div id="reveal"></div>
           </aside>
@@ -432,7 +434,12 @@
       img.addEventListener('error', () => {
         img.insertAdjacentHTML('beforebegin', sceneArt(sc.fireClass, sc.alt));
         img.remove();
+        state.model.status = 'na';
+        renderModelBox();
       });
+      startModel(img);   // análisis en segundo plano; se muestra solo tras confirmar
+    } else if (state.model.status === 'idle') {
+      state.model.status = 'na';
     }
 
     renderClassOptions();
@@ -638,11 +645,14 @@
           <ol class="seq">${passList}</ol>
         </div>
 
+        <div id="model-box"></div>
+
         <div class="notice ${score === 3 ? 'success' : 'warn'} explain">
           <span class="notice-icon">${ic(score === 3 ? 'check' : 'alert', 20)}</span>
           <div><h3>¿Por qué?</h3><p>${esc(classText)}</p><p>${esc(extText)}</p></div>
         </div>
       </section>`;
+    renderModelBox();
   }
 
   function confirmAnswers() {
@@ -797,9 +807,9 @@
     });
   }
 
-  /* ---------- Analizador de fuego (U-Net en el navegador) ---------- */
-  const an = { token: 0, url: '', result: null, cls: '', showMask: true, phase: 'idle', error: '' };
-
+  /* ---------- Modelo de detección (U-Net en el navegador) ----------
+     Corre en segundo plano sobre la imagen del caso, pero su resultado solo se
+     muestra después de «Confirmar respuestas». */
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       const el = document.createElement('script');
@@ -821,259 +831,113 @@
     return modelPromise;
   }
 
-  function resetAnalyzer() {
-    an.token++;
-    if (an.url) { try { URL.revokeObjectURL(an.url); } catch (e) { /* nada */ } }
-    an.url = ''; an.result = null; an.cls = ''; an.showMask = true; an.phase = 'idle'; an.error = '';
-  }
-
-  function viewAnalyzer() {
-    resetAnalyzer();
-    app.innerHTML = `
-      <section class="practice container analyzer">
-        <a class="backlink" href="#/">${ic('arrowLeft', 18)} Volver al inicio</a>
-        <header class="page-head">
-          <div>
-            <p class="eyebrow">Analizador de fuego</p>
-            <h1>Detecta el fuego en una imagen</h1>
-            <p class="lead">Sube una foto y el modelo marca las zonas donde detecta llamas. Después tú decides la clase de fuego.</p>
-          </div>
-        </header>
-
-        <div class="practice-layout">
-          <aside class="side" id="side" aria-label="Imagen analizada">
-            <div class="analysis-panel card">
-              <div class="an-stage empty" id="an-stage">
-                <div class="an-empty">${ic('image', 44)}<span>Aquí aparecerá tu imagen</span></div>
-              </div>
-              <p class="case-caption" id="an-caption">Usa una foto clara, con el fuego bien visible.</p>
-            </div>
-          </aside>
-
-          <div class="questions" id="an-panel"></div>
-        </div>
-      </section>`;
-
-    renderAnalyzerPanel();
-    return () => resetAnalyzer();
-  }
-
-  function renderAnalyzerPanel() {
-    const box = $('#an-panel');
-    if (!box) return;
-
-    if (an.phase === 'idle') {
-      box.innerHTML = `
-        <div class="step-bar"><span class="step-n">1</span><span>Sube una imagen</span></div>
-        <article class="card question-card">
-          <label class="dropzone" id="dropzone" for="an-file">
-            <span class="start-icon">${ic('upload', 28)}</span>
-            <strong>Elige una imagen o arrástrala aquí</strong>
-            <span class="muted">JPG, PNG o WebP · se procesa en tu navegador, no se envía a ningún servidor</span>
-            <span class="btn btn-primary">Seleccionar imagen</span>
-          </label>
-          <input type="file" id="an-file" accept="image/*" hidden>
-          ${an.error ? `<div class="notice warn">${ic('alert', 20)}<div>${esc(an.error)}</div></div>` : ''}
-        </article>
-        <div class="notice success">
-          <span class="notice-icon">${ic('shield', 20)}</span>
-          <div><h3>¿Qué hace el modelo?</h3><p>Es una red neuronal (U-Net) que detecta <strong>dónde hay fuego</strong> en la imagen. No identifica por sí sola la clase (A, B, C, D o F): eso lo decides tú después, con ayuda de la guía.</p></div>
-        </div>`;
-      bindDropzone();
-    } else if (an.phase === 'running') {
-      box.innerHTML = `
-        <div class="step-bar"><span class="step-n">2</span><span>Analizando la imagen</span></div>
-        <article class="card question-card">
-          <h2>Buscando llamas…</h2>
-          <p class="muted">El modelo corre en tu equipo y puede tardar unos segundos. No cierres la página.</p>
-          <div class="progress-block an-progress">
-            <div class="progress-meta"><span id="an-step">Cargando el modelo</span><strong id="an-pct">0%</strong></div>
-            <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="an-track"><span id="an-bar" style="width:0%"></span></div>
-          </div>
-        </article>`;
-    } else if (an.phase === 'done') {
-      renderAnalyzerResult(box);
-    }
-    hydrateIcons(box);
-  }
-
-  function bindDropzone() {
-    const input = $('#an-file'), zone = $('#dropzone');
-    if (!input || !zone) return;
-    input.addEventListener('change', () => { if (input.files && input.files[0]) startAnalysis(input.files[0]); });
-    ['dragenter', 'dragover'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('over'); }));
-    ['dragleave', 'drop'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('over'); }));
-    zone.addEventListener('drop', (e) => {
-      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) startAnalysis(f);
-    });
-  }
-
-  function setAnProgress(frac, label) {
-    const v = Math.round(frac * 100);
-    const bar = $('#an-bar'), pct = $('#an-pct'), track = $('#an-track'), st = $('#an-step');
-    if (!bar) return;
-    bar.style.width = v + '%';
-    pct.textContent = v + '%';
-    track.setAttribute('aria-valuenow', String(v));
-    if (label) st.textContent = label;
-  }
-
-  function failAnalysis(msg) {
-    an.phase = 'idle';
-    an.error = msg;
-    const stage = $('#an-stage');
-    if (stage) { stage.className = 'an-stage empty'; stage.innerHTML = '<div class="an-empty">' + ic('image', 44) + '<span>Aquí aparecerá tu imagen</span></div>'; }
-    renderAnalyzerPanel();
-  }
-
-  function startAnalysis(file) {
-    if (!file || !/^image\//.test(file.type)) { failAnalysis('El archivo no es una imagen. Prueba con un JPG, PNG o WebP.'); return; }
-    resetAnalyzer();
-    const token = an.token;
-    an.phase = 'running';
-    an.url = URL.createObjectURL(file);
-
-    const img = new Image();
-    img.alt = 'Imagen subida para analizar';
-    img.onerror = () => { if (token === an.token) failAnalysis('No se pudo leer la imagen. Prueba con otro archivo (JPG, PNG o WebP).'); };
-    img.onload = async () => {
-      if (token !== an.token) return;
-      const stage = $('#an-stage');
-      stage.className = 'an-stage';
-      stage.style.aspectRatio = Math.min(Math.max(img.naturalWidth / img.naturalHeight, 0.6), 2) + '';
-      stage.innerHTML = '';
-      stage.appendChild(img);
-      const cap = $('#an-caption'); if (cap) cap.textContent = 'Analizando…';
-      renderAnalyzerPanel();
-      setAnProgress(0, 'Cargando el modelo');
+  /* Lanza el análisis una sola vez por caso (token = id del caso en curso) */
+  function startModel(imgEl) {
+    const m = state.model;
+    if (m.status !== 'idle') return;
+    const token = m.token;
+    const run = async () => {
+      m.status = 'running'; m.progress = 0;
       try {
         await loadModel();
-        if (token !== an.token) return;
-        setAnProgress(0.02, 'Analizando');
-        const result = await window.IgnisUNet.analyze(img, (f) => { if (token === an.token) setAnProgress(0.02 + f * 0.98, 'Analizando'); });
-        if (token !== an.token) return;
-        an.result = result;
-        an.phase = 'done';
-        drawMask();
-        renderAnalyzerPanel();
-        const c = $('#an-caption');
-        if (c) c.textContent = result.detected ? 'La zona naranja marca lo que el modelo detecta como fuego.' : 'No se marcó ninguna zona de fuego.';
-        const r = $('#an-result'); if (r) r.focus({ preventScroll: false });
+        if (token !== state.model.token) return;
+        const result = await window.IgnisUNet.analyze(imgEl, (f) => {
+          if (token !== state.model.token) return;
+          m.progress = f;
+          updateModelProgress();
+        });
+        if (token !== state.model.token) return;
+        m.result = result; m.status = 'done';
       } catch (e) {
-        if (token === an.token) failAnalysis('No se pudo ejecutar el modelo. Comprueba que existan js/unet.js y model/unet_fuego.js. (' + e.message + ')');
+        if (token !== state.model.token) return;
+        m.status = (e && e.name === 'SecurityError') ? 'file' : 'error';
+        if (window.console) console.warn('Modelo de fuego:', e);
       }
+      renderModelBox();
     };
-    img.src = an.url;
+    if (imgEl.complete && imgEl.naturalWidth) run();
+    else imgEl.addEventListener('load', run, { once: true });
   }
 
-  /* Pinta la máscara (256×256) sobre la imagen */
-  function drawMask() {
-    const stage = $('#an-stage'), r = an.result;
-    if (!stage || !r) return;
-    let cv = $('#an-mask', stage);
+  function updateModelProgress() {
+    const bar = $('#model-bar'), pct = $('#model-pct');
+    if (!bar) return;
+    const v = Math.round(state.model.progress * 100);
+    bar.style.width = v + '%';
+    pct.textContent = v + '%';
+  }
+
+  /* Pinta la máscara sobre la imagen respetando el recorte «cover» del contenedor */
+  function drawModelOverlay() {
+    const box = $('#case-image'), m = state.model, r = m.result;
+    if (!box) return;
+    let cv = $('#model-mask', box);
+    if (!state.confirmed || !r || !r.detected || !m.showMask) { if (cv) cv.hidden = true; return; }
+    const img = $('img', box);
+    if (!img || !img.naturalWidth) return;
+    const W = box.clientWidth, H = box.clientHeight;
     if (!cv) {
       cv = document.createElement('canvas');
-      cv.id = 'an-mask'; cv.className = 'an-mask';
-      cv.width = r.size; cv.height = r.size;
+      cv.id = 'model-mask'; cv.className = 'model-mask';
       cv.setAttribute('aria-hidden', 'true');
-      stage.appendChild(cv);
+      box.appendChild(cv);
     }
-    const ctx = cv.getContext('2d');
-    const data = ctx.createImageData(r.size, r.size);
+    cv.hidden = false;
+    cv.width = W * 2; cv.height = H * 2;
+    const src = document.createElement('canvas');
+    src.width = r.size; src.height = r.size;
+    const sctx = src.getContext('2d');
+    const data = sctx.createImageData(r.size, r.size);
     for (let i = 0; i < r.mask.length; i++) {
       if (r.mask[i]) {
         const a = Math.round(90 + 120 * Math.min(1, (r.prob[i] - r.threshold) / (1 - r.threshold)));
         data.data[i * 4] = 255; data.data[i * 4 + 1] = 112; data.data[i * 4 + 2] = 40; data.data[i * 4 + 3] = a;
       }
     }
-    ctx.putImageData(data, 0, 0);
-    cv.hidden = !an.showMask;
+    sctx.putImageData(data, 0, 0);
+    // recorte equivalente a object-fit: cover
+    const imgRatio = img.naturalWidth / img.naturalHeight, boxRatio = W / H;
+    let sx = 0, sy = 0, sw = r.size, sh = r.size;
+    if (imgRatio > boxRatio) { sw = r.size * (boxRatio / imgRatio); sx = (r.size - sw) / 2; }
+    else { sh = r.size * (imgRatio / boxRatio); sy = (r.size - sh) / 2; }
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
   }
 
-  function renderAnalyzerResult(box) {
-    const r = an.result;
-    const pct = (r.fraction * 100);
-    const pctText = pct < 0.1 ? '< 0,1' : pct.toFixed(1).replace('.', ',');
-
-    let body;
-    if (r.detected) {
-      body = `
-        <div class="step-bar"><span class="step-n">2</span><span>Resultado del análisis</span></div>
-        <article class="card question-card result-card" id="an-result" tabindex="-1">
-          <div class="result-head">
-            <span class="result-icon fire">${ic('flame', 26)}</span>
-            <div>
-              <h2>Se detectó fuego</h2>
-              <p class="muted">Aproximadamente el <strong>${pctText}%</strong> de la imagen está marcado como llamas.</p>
-            </div>
-          </div>
-          <label class="check-row"><input type="checkbox" id="an-toggle" ${an.showMask ? 'checked' : ''}> Mostrar la zona detectada sobre la imagen</label>
-          <div class="notice warn"><span class="notice-icon">${ic('alert', 20)}</span><div><p>El modelo solo marca dónde hay llamas. Es una ayuda educativa, no un detector de emergencias: <strong>ante un incendio real, evacúa y llama a emergencias.</strong></p></div></div>
-        </article>
-
-        <div class="step-bar"><span class="step-n">3</span><span>¿Qué tipo de fuego crees que es?</span></div>
-        <article class="card question-card">
-          <h2>Elige la clase según lo que arde</h2>
-          <p class="muted">Fíjate en el material: sólidos, líquidos, gases, metales o aceites de cocina.</p>
-          <div class="class-options" id="an-classes">${anClassOptions()}</div>
-          <div id="an-advice">${anAdvice()}</div>
-        </article>`;
+  /* Bloque «Detección del modelo» dentro de las respuestas (solo tras confirmar) */
+  function renderModelBox() {
+    const box = $('#model-box');
+    drawModelOverlay();
+    if (!box || !state.confirmed) return;
+    const m = state.model, sc = state.scenario, r = m.result;
+    let inner;
+    if (m.status === 'na') {
+      inner = `<p class="reveal-note">La detección del modelo se muestra con las imágenes reales del banco. Esta es una ilustración de ejemplo.</p>`;
+    } else if (m.status === 'file') {
+      inner = `<p class="reveal-note">El navegador bloquea leer las imágenes cuando la página se abre como archivo (<code>file://</code>). Para ver la detección del modelo, abre la página con un servidor local (extensión Live Server de VS Code) o desde GitHub Pages.</p>`;
+    } else if (m.status === 'error') {
+      inner = `<p class="reveal-note">No se pudo ejecutar el modelo en este caso. Comprueba que existan <code>js/unet.js</code> y <code>model/unet_fuego.js</code>.</p>`;
+    } else if (m.status !== 'done') {
+      inner = `<p class="reveal-note">El modelo sigue analizando la imagen…</p>
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span id="model-bar" style="width:${Math.round(m.progress * 100)}%"></span></div>
+        <small class="list-label"><span id="model-pct">${Math.round(m.progress * 100)}%</span></small>`;
     } else {
-      body = `
-        <div class="step-bar"><span class="step-n">2</span><span>Resultado del análisis</span></div>
-        <article class="card question-card result-card" id="an-result" tabindex="-1">
-          <div class="result-head">
-            <span class="result-icon">${ic('shield', 26)}</span>
-            <div>
-              <h2>No se detectó fuego</h2>
-              <p class="muted">El modelo no encontró una zona de llamas lo bastante grande en esta imagen.</p>
-            </div>
-          </div>
-          <div class="notice success"><span class="notice-icon">${ic('check', 20)}</span><div><p>Prueba con una foto más cercana o con mejor luz. Si ves llamas o humo de verdad, no esperes al análisis: evacúa y da la alarma.</p></div></div>
-        </article>`;
+      const pct = r.fraction * 100;
+      const pctText = pct < 0.1 ? '< 0,1' : pct.toFixed(1).replace('.', ',');
+      inner = r.detected
+        ? `<p class="reveal-note">El modelo detectó fuego en aproximadamente el <strong>${pctText}%</strong> de la imagen (zona naranja sobre la foto).</p>
+           <label class="check-row"><input type="checkbox" id="model-toggle" ${m.showMask ? 'checked' : ''}> Mostrar la zona detectada sobre la imagen</label>`
+        : `<p class="reveal-note">El modelo no marcó ninguna zona de fuego en esta imagen, aunque el caso sí es de Clase ${esc(sc.fireClass)}. Los modelos pueden fallar: confía en lo que ves.</p>`;
     }
-
-    box.innerHTML = body + `
-      <div class="actions-row">
-        <button type="button" class="btn btn-primary btn-lg" data-action="an-again">${ic('refresh', 20)} Analizar otra imagen</button>
-        <a class="btn btn-ghost" href="#/guia">${ic('book', 18)} Repasar la guía</a>
-        <button type="button" class="btn btn-quiet" data-action="start-practice">Ir a la práctica</button>
+    box.innerHTML = `
+      <div class="reveal-row ${m.status === 'done' && r.detected ? 'ok' : ''}">
+        <p class="reveal-title">${ic('scan', 15)} Detección del modelo</p>
+        ${inner}
       </div>`;
-
-    const tg = $('#an-toggle', box);
-    if (tg) tg.addEventListener('change', () => { an.showMask = tg.checked; const cv = $('#an-mask'); if (cv) cv.hidden = !an.showMask; });
-  }
-
-  function anClassOptions() {
-    return CLASS_KEYS.map((k) => {
-      const c = D.FIRE_CLASSES[k];
-      const sel = an.cls === k;
-      return `<button type="button" class="class-opt${sel ? ' selected' : ''}" data-action="an-class" data-id="${k}" aria-pressed="${sel}">
-        <span class="opt-mark">${sel ? ic('check', 14) : ''}</span>
-        <span class="class-letter">${k}</span>
-        <strong>${esc(c.title)}</strong>
-        <small>${esc(c.examples)}</small>
-      </button>`;
-    }).join('');
-  }
-
-  function anAdvice() {
-    if (!an.cls) return '';
-    const fc = D.FIRE_CLASSES[an.cls];
-    const best = byId(D.EXTINGUISHERS, fc.best);
-    const others = fc.ok.map((id) => byId(D.EXTINGUISHERS, id).short);
-    return `
-      <div class="notice success advice">
-        <span class="notice-icon">${ic('extinguisher', 20)}</span>
-        <div>
-          <h3>Clase ${esc(fc.key)} · ${esc(fc.title)}</h3>
-          <p><strong>Mejor opción:</strong> ${esc(best.name)}${others.length ? '. <strong>También sirven:</strong> ' + esc(others.join(', ')) : ''}.</p>
-          <p>${esc(fc.why)}</p>
-          ${fc.warning ? `<p><strong>No uses agua.</strong> ${esc(fc.warning)}</p>` : ''}
-          <a class="text-link" href="#/guia/metodo-pass">Ver el método PASS ${ic('arrow', 16)}</a>
-        </div>
-      </div>`;
+    const tg = $('#model-toggle', box);
+    if (tg) tg.addEventListener('change', () => { m.showMask = tg.checked; drawModelOverlay(); });
   }
 
   /* ---------- Cómo usar la página ---------- */
@@ -1124,7 +988,6 @@
     { sel: ['#start-panel'], title: 'Empieza aquí', text: 'Pulsa «Comenzar práctica»: el sistema elige al azar la imagen de un incendio y te hace tres preguntas sobre cómo actuar.' },
     { sel: ['.how-strip'], title: 'Así se practica', text: 'Observas la imagen, respondes el tipo de fuego, el extintor y el método PASS, y al confirmar ves las respuestas correctas para compararlas con las tuyas.' },
     { sel: ['#learning-entry'], title: '¿Prefieres aprender primero?', text: 'La guía de seguridad explica los tipos de fuego, los extintores y el método PASS. Conviene leerla antes de practicar.' },
-    { sel: ['#analyzer-entry'], title: 'Analiza tu propia imagen', text: 'El analizador usa una red neuronal para marcar dónde hay llamas en una foto que subas. Después tú eliges la clase de fuego y ves qué extintor corresponde.' },
     { sel: ['#help-fab'], title: 'Ayuda y navegación', text: 'Este botón está en todas las pantallas. Desde aquí vas al inicio, a la práctica, a la guía, a este tutorial o reabres el recorrido.' }
   ];
   let tourIdx = -1;
@@ -1286,11 +1149,6 @@
     switch (t.dataset.action) {
       case 'start-practice': startPractice(); break;
       case 'new-practice': startPractice(); break;
-      case 'an-again': resetAnalyzer(); renderAnalyzerPanel(); { const st = $('#an-stage'); if (st) { st.className = 'an-stage empty'; st.style.aspectRatio = ''; st.innerHTML = '<div class="an-empty">' + ic('image', 44) + '<span>Aquí aparecerá tu imagen</span></div>'; } const c = $('#an-caption'); if (c) c.textContent = 'Usa una foto clara, con el fuego bien visible.'; } break;
-      case 'an-class':
-        an.cls = an.cls === id ? '' : id;
-        { const b = $('#an-classes'), a = $('#an-advice'); if (b) { b.innerHTML = anClassOptions(); hydrateIcons(b); const f = $('[data-id="' + id + '"]', b); if (f) f.focus(); } if (a) { a.innerHTML = anAdvice(); hydrateIcons(a); } }
-        break;
       case 'scroll-to': {
         const el = document.getElementById(t.dataset.target);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1351,7 +1209,7 @@
     }
   });
 
-  window.addEventListener('resize', placeTour);
+  window.addEventListener('resize', () => { placeTour(); drawModelOverlay(); });
   window.addEventListener('scroll', () => { if (tourOpen) placeTour(); }, { passive: true });
   window.addEventListener('hashchange', render);
 

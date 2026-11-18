@@ -13,7 +13,7 @@ index.html              Estructura base, pie de página y botón de ayuda
 css/styles.css          Estilos (colores y medidas del prototipo)
 js/data.js              Contenido educativo (fuegos, extintores, PASS, tutorial, preguntas frecuentes)
 js/escenarios.js        BANCO DE IMÁGENES de la práctica (aquí agregas tus imágenes)
-js/app.js               Pantallas, navegación, práctica, analizador y recorrido guiado
+js/app.js               Pantallas, navegación, práctica, modelo y recorrido guiado
 js/unet.js              Motor de la U-Net: ejecuta el modelo en el navegador (sin librerías)
 model/unet_fuego.js     Pesos del modelo unet_fuego.pt (BatchNorm ya fusionada)
 img/escenarios/         Carpeta donde van las imágenes
@@ -25,16 +25,17 @@ img/escenarios/         Carpeta donde van las imágenes
 | `#/` | Inicio |
 | `#/cargando` | Pantalla de carga (el sistema prepara una imagen al azar) |
 | `#/practica` | Imagen a la izquierda, tres preguntas a la derecha, «Confirmar respuestas» |
-| `#/analizador` | Analizador de fuego: subes una imagen y el modelo marca las llamas |
 | `#/guia` | Guía de seguridad (`#/guia/metodo-pass`, `#/guia/plan-de-accion`, …) |
 | `#/como-usar` | Tutorial de uso, recorrido guiado y preguntas frecuentes |
 
 El botón «?» (esquina inferior derecha) está en todas las pantallas y lleva a cada sección.
 
 ## Cómo funciona la práctica
-1. El usuario pulsa «Comenzar práctica»; el sistema elige una imagen al azar (sin repetir la misma dos veces seguidas).
-2. Responde: tipo de fuego, extintor y orden del método PASS.
-3. Al pulsar «Confirmar respuestas» (se activa cuando las tres están respondidas), las respuestas se bloquean y debajo de la imagen aparecen las respuestas correctas, la comparación, el puntaje y la explicación.
+1. El usuario pulsa «Comenzar práctica»; el sistema elige una imagen al azar. Las respuestas correctas del caso (clase de fuego, extintor, método PASS) quedan guardadas pero **no se muestran**.
+2. Mientras el usuario observa la imagen, el modelo de IA la analiza en segundo plano (tampoco muestra nada todavía).
+3. El usuario responde: tipo de fuego, extintor y orden del método PASS.
+4. Al pulsar «Confirmar respuestas» las respuestas se bloquean y debajo de la imagen aparecen las correctas, la comparación con las del usuario, el puntaje, la explicación y la **detección del modelo** (zona de fuego sobre la foto y porcentaje de área).
+5. «Practicar con otra imagen» trae otra distinta: **no se repite ninguna hasta haber visto todo el banco** (también al recargar la página; se guarda en el navegador). Al terminar la ronda empieza otra y la página lo avisa; la primera de la ronda nueva nunca es la última vista.
 
 ## Agregar tus imágenes
 1. Copia las imágenes en `img/escenarios/`.
@@ -50,12 +51,14 @@ Mientras la lista esté vacía, la práctica usa 5 ilustraciones de ejemplo (una
 Qué extintores se aceptan como correctos se calcula a partir de las clases de cada extintor en `js/data.js`
 (`EXTINGUISHERS[...].classes`), y el recomendado de cada clase es `FIRE_CLASSES[...].best`.
 
-## Analizador de fuego (modelo U-Net)
+## Modelo de detección de fuego (U-Net)
 Integra `unet_fuego.pt`: una U-Net de segmentación (entrada RGB 256×256, salida de 1 canal, umbral 0,5, ~2 M de parámetros).
-- **Qué hace:** marca los píxeles que considera fuego y calcula qué porcentaje de la imagen ocupan. Si es menos del 0,5 % dice «No se detectó fuego» (`IgnisUNet.MIN_FRACTION`).
-- **Qué no hace:** no clasifica A/B/C/D/F (el modelo solo segmenta). Tras la detección, el usuario elige la clase y la página muestra el extintor correspondiente (datos de `js/data.js`).
-- **Dónde corre:** en el navegador del usuario (JavaScript puro, ~7–10 s por imagen); la imagen no se sube a ningún servidor. Funciona abriendo `index.html` directamente.
-- **Carga diferida:** `js/unet.js` y `model/unet_fuego.js` (~10 MB) solo se descargan al entrar al analizador.
+- **Qué hace:** marca los píxeles que considera fuego y calcula qué porcentaje de la imagen ocupan. Si es menos del 0,5 % dice que no detectó fuego (`IgnisUNet.MIN_FRACTION`).
+- **Qué no hace:** no clasifica A/B/C/D/F (solo segmenta). La clase correcta de cada imagen sale de `js/escenarios.js` (`fireClass`).
+- **Dónde corre:** en el navegador del usuario (JavaScript puro, ~7–10 s por imagen, sin bloquear la página). La imagen no se envía a ningún servidor.
+- **Carga diferida:** `js/unet.js` y `model/unet_fuego.js` (~10 MB) se descargan al empezar una práctica con imágenes reales.
+- **Con las ilustraciones de ejemplo** (banco vacío) no se ejecuta el modelo; el recuadro lo indica.
+- **Importante:** para leer los píxeles de las imágenes del banco el navegador exige abrir la página por **http** (extensión Live Server de VS Code, o GitHub Pages). Abierta como archivo (`file://`) la práctica funciona igual, pero el recuadro de detección avisa de que el navegador lo bloquea.
 
 ### Supuestos del preprocesamiento (ajustables en `js/unet.js` → `CONFIG`)
 El `.pt` solo trae los pesos, no el código de entrenamiento, así que dos detalles se dedujeron:

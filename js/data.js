@@ -183,11 +183,19 @@ window.IGNIS_DATA = (function () {
       what: 'Practica con otro caso o refuerza lo que fallaste.',
       how: 'Pulsa «Practicar con otra imagen» para un nuevo caso, o «Repasar la guía» para volver a leer.',
       cta: null
+    },
+    {
+      n: '07', title: 'Analiza tu propia imagen (opcional)', where: 'Analizador de fuego',
+      what: 'Un modelo de inteligencia artificial (U-Net) marca en tu foto las zonas donde detecta llamas.',
+      how: 'Sube o arrastra una imagen, espera unos segundos y mira la zona marcada. Si se detecta fuego, elige la clase (A, B, C, D o F) para ver qué extintor corresponde. El modelo detecta dónde hay llamas; la clase la decides tú.',
+      cta: 'Abrir el analizador', href: '#/analizador'
     }
   ];
 
   const FAQ = [
     { q: '¿De dónde salen las imágenes?', a: 'El sistema elige al azar una imagen de su banco de casos. Cada vez que practicas puede aparecer una distinta.' },
+    { q: '¿Mi imagen se sube a internet?', a: 'No. El analizador corre dentro de tu navegador: la imagen no sale de tu equipo ni se almacena.' },
+    { q: '¿El analizador dice qué clase de fuego es?', a: 'No. Detecta dónde hay llamas en la imagen. La clase (A, B, C, D o F) la eliges tú según lo que arde, y la página te indica qué extintor corresponde.' },
     { q: '¿Se guardan mis respuestas?', a: 'No. Las respuestas solo se usan durante la práctica y no se almacenan ni se comparten.' },
     { q: '¿Puedo repetir la práctica?', a: 'Sí. Al terminar pulsa «Practicar con otra imagen» y te muestra un caso nuevo.' },
     { q: '¿Puedo cambiar mi respuesta?', a: 'Sí, hasta que pulses «Confirmar respuestas». Después se bloquean para que puedas compararlas con las correctas.' },
